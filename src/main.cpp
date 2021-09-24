@@ -102,90 +102,71 @@ int main() {
            *   sequentially every .02 seconds
            */
           int prev_size = previous_path_x.size();
-           if(prev_size > 0)
-          {
+          if(prev_size > 0) {
             car_s = end_path_s;
           }
+          // these variables are used to guide the ego car to change lane and keep a desired velocity.
+          bool too_close = false;
+          bool car_left = false;
+          bool car_right = false;
 
-           // these variables are used to guide the ego car to change lane and keep a desired velocity.
-           bool too_close = false;
-           bool car_left = false;
-           bool car_right = false;
-
-           for(int i = 0; i < sensor_fusion.size(); i++)
-           {
-             float d = sensor_fusion[i][6];
-             int car_lane = -1;
-             //check if is the same lane with ego car
-             if(d > 0 && d < 4)
-             {
-               car_lane = 0;
-             }else if(d > 4 && d < 8)
-             {
-               car_lane = 1;
-             }else if(d > 8 && d < 12)
-             {
-               car_lane = 2;
-             }
-             if(car_lane < 0)
-             {
-               continue;
-             }
-             
-             // Find the car speed
-             double vx = sensor_fusion[i][3];
-             double vy = sensor_fusion[i][4];
-             double check_speed = sqrt(vx*vx + vy*vy);
-             double check_car_s = sensor_fusion[i][5];
-             // Estimate car s when using previous points.
-             check_car_s +=((double)check_speed * 0.02 * prev_size);
-             if ( car_lane == lane ) 
-             {
-               // car in our lane.
-               too_close |= check_car_s > car_s && check_car_s - car_s < 30;
-             } else if ( car_lane - lane == -1 ) 
-             {
-               // check car left
-               car_left |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
-              } else if ( car_lane - lane == 1 ) 
-             {
-               //check car right
-               car_right |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
-              }         
+          for(int i = 0; i < sensor_fusion.size(); i++) {
+            float d = sensor_fusion[i][6];
+            int car_lane = -1;
+            //check if is the same lane with ego car
+            if(d > 0 && d < 4) {
+              car_lane = 0;
+            } else if(d > 4 && d < 8) {
+              car_lane = 1;
+            } else if(d > 8 && d < 12) {
+              car_lane = 2;
+            }
+            if(car_lane < 0) {
+              continue;
+            }
+  
+            // Find the car speed
+            double vx = sensor_fusion[i][3];
+            double vy = sensor_fusion[i][4];
+            double check_speed = sqrt(vx*vx + vy*vy);
+            double check_car_s = sensor_fusion[i][5];
+            // Estimate car s when using previous points.
+            check_car_s +=((double)check_speed * 0.02 * prev_size);
+            if ( car_lane == lane ) {
+              // car in our lane.
+              too_close |= check_car_s > car_s && check_car_s - car_s < 30;
+            } else if ( car_lane - lane == -1 ) {
+              // check car left
+              car_left |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+            } else if ( car_lane - lane == 1 ) {
+              //check car right
+              car_right |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+            }         
            }
           
-          // Accroding to above decision, the ego car take safty action.
+          // lane change actions
           double speed_diff = 0;
-          if(too_close)
-          {
-            if(!car_left && lane > 0)
-            {
+          if(too_close) {
+            if(!car_left && lane > 0) {
               //There is no car on the left lane and ego car not in lane 0, ego car change left lane.
               lane--;
-            }else if(!car_right && lane < 2)
-            {
-               //There is no car on the right lane and ego car not in lane 2, ego car change right lane.
+            } else if(!car_right && lane < 2) {
+              //There is no car on the right lane and ego car not in lane 2, ego car change right lane.
               lane++;
-            }else
-            {
+            } else {
               ref_vel -= 0.224;  // 5m/s acceleration
             }
-          }else
-          {
-            if(lane != 1)
-            {
-              if(( lane == 0 && !car_right ) || ( lane == 2 && !car_left ) )
-              {
+          } else {
+            if(lane != 1) {
+              if((lane == 0 && !car_right) || (lane == 2 && !car_left)) {
                 lane = 1; //back to the center lane
               }
             }
-            if(ref_vel < 49.5)
-            {
+            if(ref_vel < 49.5) {
               ref_vel += 0.224;
             }
-          }
-            
-          // adcordinhd to above action, generate the best trajectory.    
+          }            
+          // generate the best trajectory.    
           // create a list widely spaced (x, y) waypoints, evenly spaced at 30m
           // later we will interoplate these waypoints with s spline.
           vector<double> ptsx;
@@ -197,8 +178,7 @@ int main() {
 
           // Reference the starting point as where the car is or at the previous paths end points.
           // If previous size is almost empty, use the car as a starting reference
-          if(prev_size < 2)
-          {
+          if(prev_size < 2) {
             double prev_car_x = car_x - cos(car_yaw);
             double prev_car_y = car_y - sin(car_yaw);
 
@@ -207,8 +187,7 @@ int main() {
 
             ptsy.push_back(prev_car_y);
             ptsy.push_back(car_y);
-          }else
-          {
+          } else {
             // use the last two points.
             ref_x = previous_path_x[prev_size - 1];
             ref_y = previous_path_y[prev_size - 1];
@@ -228,7 +207,6 @@ int main() {
           vector<double> next_wp0 = getXY(car_s + 30, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp1 = getXY(car_s + 60, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp2 = getXY(car_s + 90, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
           ptsx.push_back(next_wp0[0]);
           ptsx.push_back(next_wp1[0]);
           ptsx.push_back(next_wp2[0]);
@@ -239,8 +217,7 @@ int main() {
 
           // Shift the points to local car coordinates make sure that the car or that
           // last point of previous path at zero, the origin and its angle at zero degree.
-          for(int i = 0; i < ptsx.size(); ++i)
-          {
+          for(int i = 0; i < ptsx.size(); ++i) {
             //shift car reference ange to 0 degree
             double shift_x = ptsx[i] - ref_x;
             double shift_y = ptsy[i] - ref_y;
@@ -255,8 +232,7 @@ int main() {
 
           // start with all of the previous path point from last time
           // (previous path size will be less than 50)
-          for(int i = 0; i < prev_size; i++)
-          {
+          for(int i = 0; i < prev_size; i++) {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
           }
@@ -270,8 +246,7 @@ int main() {
           double x_add_on = 0;
 
           // Fill up the rest of our planer after filling with previous.outputs will be 50 points.
-          for(int i = 0; i <= 50 - prev_size; ++i)
-          {
+          for(int i = 0; i <= 50 - prev_size; ++i) {
             double N = target_dist / (0.02 * ref_vel/2.24);
             double x_point = x_add_on + target_x / N;
             double y_point = s(x_point);
@@ -291,7 +266,6 @@ int main() {
             next_x_vals.push_back(x_point);
             next_y_vals.push_back(y_point);
           }
-
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
